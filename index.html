@@ -284,7 +284,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--dark);color:var(--white);
       <div class="step-hd"><div class="step-n">3</div><div class="step-title">Pegar la URL del CSV acá</div></div>
       <div class="step-desc">El dashboard la guardará y consultará la planilla cada 30 segundos para actualizar el pipeline automáticamente.</div>
       <div class="url-input-wrap">
-        <input class="url-input" id="setup-url" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">
+        <input class="url-input" id="setup-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vTkPNH9DtPOkDY4Pc7DT1jeJY9A20vEZ26Bdxsl_eXPs5D8jzqczHPMmth6SiJ2J2EkYXULaWcRbDxD/pub?gid=0&single=true&output=csv" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">single=true<input class="url-input" id="setup-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vTkPNH9DtPOkDY4Pc7DT1jeJY9A20vEZ26Bdxsl_eXPs5D8jzqczHPMmth6SiJ2J2EkYXULaWcRbDxD/pub?gid=0&single=true&output=csv" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">output=csv" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">
         <button class="demo-btn" onclick="useDemoMode()">🎮 Usar demo</button>
       </div>
     </div>
@@ -575,33 +575,67 @@ async function fetchSheets() {
   try {
     let csvText;
     if (isDemoMode || sheetsURL === 'DEMO') {
-      // Simulate async for realism
       await new Promise(r => setTimeout(r, 600 + Math.random() * 400));
       csvText = DEMO_CSV;
-      // Demo: randomly complete one workflow to show live updates
       if (Math.random() > 0.7) csvText = simulateDemoUpdate(csvText);
     } else {
-      // Real Sheets fetch via CORS proxy or direct (same-origin)
-      // Using allorigins.win as a CORS proxy for demo purposes
-      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(sheetsURL)}`;
-      const res = await fetch(proxy);
-      if (!res.ok) throw new Error('Fetch failed');
-      const json = await res.json();
-      csvText = json.contents;
+      csvText = await fetchCSVWithFallbacks(sheetsURL);
     }
     const parsed = parseCSV(csvText);
+    if (parsed.length === 0) throw new Error('CSV vacío o mal formateado');
     updateDashboard(parsed);
     lastSyncTime = new Date();
     document.getElementById('last-sync-lbl').textContent = 'Sync: ' + lastSyncTime.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     showToast(`✅ ${parsed.length} filas sincronizadas desde Sheets`, 'sheets');
   } catch (e) {
-    showToast('⚠ No se pudo conectar a Sheets. Verificá la URL y que sea pública.', 'error');
-    // Fall back to demo data
+    console.error('Sheets fetch error:', e);
+    showToast('⚠ No se pudo leer el Sheets. Revisá que la URL sea pública (CSV).', 'error');
     if (WFS.length === 0) { updateDashboard(parseCSV(DEMO_CSV)); }
   }
 
   if (chip) { chip.classList.remove('syncing'); document.getElementById('sync-icon').textContent = '🔄'; document.getElementById('sync-label').textContent = 'Sync Sheets'; }
   if (btn) btn.innerHTML = '🔄 Actualizar ahora';
+}
+
+async function fetchCSVWithFallbacks(url) {
+  // Strategy 1: fetch directo (funciona cuando Google Sheets envía CORS headers)
+  try {
+    const res = await fetch(url, { redirect: 'follow' });
+    if (res.ok) {
+      const text = await res.text();
+      // Verificar que sea CSV real (no una página HTML de error)
+      if (text.trim().startsWith('ID_Workflow') || text.trim().startsWith('"ID_Workflow') || text.includes(',')) {
+        const firstLine = text.trim().split('\n')[0];
+        if (!firstLine.toLowerCase().includes('<html') && !firstLine.toLowerCase().includes('<!doctype')) {
+          return text;
+        }
+      }
+    }
+  } catch(e) { /* continuar con fallback */ }
+
+  // Strategy 2: proxy corsproxy.io (más confiable que allorigins)
+  try {
+    const proxy2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    const res2 = await fetch(proxy2);
+    if (res2.ok) {
+      const text2 = await res2.text();
+      if (text2.includes(',') && !text2.trim().startsWith('<')) return text2;
+    }
+  } catch(e) { /* continuar */ }
+
+  // Strategy 3: allorigins como último recurso
+  try {
+    const proxy3 = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const res3 = await fetch(proxy3);
+    if (res3.ok) {
+      const json3 = await res3.json();
+      if (json3.contents && json3.contents.includes(',') && !json3.contents.trim().startsWith('<')) {
+        return json3.contents;
+      }
+    }
+  } catch(e) { /* falló todo */ }
+
+  throw new Error('Todos los métodos de conexión fallaron');
 }
 
 function simulateDemoUpdate(csv) {

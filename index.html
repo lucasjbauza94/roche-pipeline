@@ -284,7 +284,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--dark);color:var(--white);
       <div class="step-hd"><div class="step-n">3</div><div class="step-title">Pegar la URL del CSV acá</div></div>
       <div class="step-desc">El dashboard la guardará y consultará la planilla cada 30 segundos para actualizar el pipeline automáticamente.</div>
       <div class="url-input-wrap">
-        <input class="url-input" id="setup-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vTkPNH9DtPOkDY4Pc7DT1jeJY9A20vEZ26Bdxsl_eXPs5D8jzqczHPMmth6SiJ2J2EkYXULaWcRbDxD/pub?gid=0&single=true&output=csv" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">single=true<input class="url-input" id="setup-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vTkPNH9DtPOkDY4Pc7DT1jeJY9A20vEZ26Bdxsl_eXPs5D8jzqczHPMmth6SiJ2J2EkYXULaWcRbDxD/pub?gid=0&single=true&output=csv" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">output=csv" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">
+        <input class="url-input" id="setup-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vTkPNH9DtPOkDY4Pc7DT1jeJY9A20vEZ26Bdxsl_eXPs5D8jzqczHPMmth6SiJ2J2EkYXULaWcRbDxD/pub?gid=0&single=true&output=csv" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">
         <button class="demo-btn" onclick="useDemoMode()">🎮 Usar demo</button>
       </div>
     </div>
@@ -575,67 +575,28 @@ async function fetchSheets() {
   try {
     let csvText;
     if (isDemoMode || sheetsURL === 'DEMO') {
+      // Simulate async for realism
       await new Promise(r => setTimeout(r, 600 + Math.random() * 400));
       csvText = DEMO_CSV;
+      // Demo: randomly complete one workflow to show live updates
       if (Math.random() > 0.7) csvText = simulateDemoUpdate(csvText);
     } else {
       csvText = await fetchCSVWithFallbacks(sheetsURL);
     }
     const parsed = parseCSV(csvText);
-    if (parsed.length === 0) throw new Error('CSV vacío o mal formateado');
+    if (parsed.length === 0) throw new Error('CSV vacío');
     updateDashboard(parsed);
     lastSyncTime = new Date();
     document.getElementById('last-sync-lbl').textContent = 'Sync: ' + lastSyncTime.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     showToast(`✅ ${parsed.length} filas sincronizadas desde Sheets`, 'sheets');
   } catch (e) {
-    console.error('Sheets fetch error:', e);
-    showToast('⚠ No se pudo leer el Sheets. Revisá que la URL sea pública (CSV).', 'error');
+    showToast('⚠ No se pudo conectar a Sheets. Verificá la URL y que sea pública.', 'error');
+    // Fall back to demo data
     if (WFS.length === 0) { updateDashboard(parseCSV(DEMO_CSV)); }
   }
 
   if (chip) { chip.classList.remove('syncing'); document.getElementById('sync-icon').textContent = '🔄'; document.getElementById('sync-label').textContent = 'Sync Sheets'; }
   if (btn) btn.innerHTML = '🔄 Actualizar ahora';
-}
-
-async function fetchCSVWithFallbacks(url) {
-  // Strategy 1: fetch directo (funciona cuando Google Sheets envía CORS headers)
-  try {
-    const res = await fetch(url, { redirect: 'follow' });
-    if (res.ok) {
-      const text = await res.text();
-      // Verificar que sea CSV real (no una página HTML de error)
-      if (text.trim().startsWith('ID_Workflow') || text.trim().startsWith('"ID_Workflow') || text.includes(',')) {
-        const firstLine = text.trim().split('\n')[0];
-        if (!firstLine.toLowerCase().includes('<html') && !firstLine.toLowerCase().includes('<!doctype')) {
-          return text;
-        }
-      }
-    }
-  } catch(e) { /* continuar con fallback */ }
-
-  // Strategy 2: proxy corsproxy.io (más confiable que allorigins)
-  try {
-    const proxy2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const res2 = await fetch(proxy2);
-    if (res2.ok) {
-      const text2 = await res2.text();
-      if (text2.includes(',') && !text2.trim().startsWith('<')) return text2;
-    }
-  } catch(e) { /* continuar */ }
-
-  // Strategy 3: allorigins como último recurso
-  try {
-    const proxy3 = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const res3 = await fetch(proxy3);
-    if (res3.ok) {
-      const json3 = await res3.json();
-      if (json3.contents && json3.contents.includes(',') && !json3.contents.trim().startsWith('<')) {
-        return json3.contents;
-      }
-    }
-  } catch(e) { /* falló todo */ }
-
-  throw new Error('Todos los métodos de conexión fallaron');
 }
 
 function simulateDemoUpdate(csv) {
@@ -651,23 +612,61 @@ function simulateDemoUpdate(csv) {
 function parseCSV(text) {
   const lines = text.trim().split('\n').filter(l => l.trim());
   if (lines.length < 2) return [];
-  // Skip header row
+
+  // Parse a single CSV line respecting quoted fields
+  function parseLine(line) {
+    const result = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
+      else { cur += ch; }
+    }
+    result.push(cur.trim());
+    return result;
+  }
+
+  const clean = (v) => (v||'').replace(/^"|"$/g,'').trim();
+
+  // Read header row and build column index map (case-insensitive, ignore accents)
+  const headerCols = parseLine(lines[0]).map(h => clean(h).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_]/g,'_'));
+
+  const idx = (names) => {
+    for (const n of names) {
+      const i = headerCols.findIndex(h => h.includes(n));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+
+  // Map column names — supports both original 9-col and extended 12-col layouts
+  const iID     = idx(['id_workflow','id']);
+  const iMat    = idx(['material']);
+  const iArea   = idx(['area']);
+  const iParam  = idx(['parametro_sap','parametro','param']);
+  const iDays   = idx(['dias_proceso','dias','days']);
+  const iStatus = idx(['estado','status']);
+  const iResp   = idx(['responsable']);
+  const iFecha  = idx(['fecha_completado','fecha']);
+  const iReason = idx(['motivo_demora','motivo','reason']);
+
   return lines.slice(1).map(line => {
-    // Handle quoted CSV
-    const cols = line.match(/(".*?"|[^,]+|(?<=,)(?=,)|(?<=,)$|^(?=,))/g) || line.split(',');
-    const clean = (v) => (v||'').replace(/^"|"$/g,'').trim();
-    const area = clean(cols[2]).toLowerCase();
-    const status = clean(cols[5]).toLowerCase();
+    const cols = parseLine(line);
+    const g = (i) => i >= 0 ? clean(cols[i]) : '';
+    const area   = g(iArea).toLowerCase();
+    const status = g(iStatus).toLowerCase();
     return {
-      id:       clean(cols[0]) || 'WF-???',
-      material: clean(cols[1]) || 'Sin nombre',
-      area:     AREAS[area] ? area : 'compras',
-      param:    clean(cols[3]) || '—',
-      days:     parseInt(clean(cols[4])) || 0,
-      status:   ['done','wip','pending','blocked'].includes(status) ? status : 'pending',
-      responsable: clean(cols[6]) || '',
-      fecha:    clean(cols[7]) || '',
-      reason:   clean(cols[8]) || '',
+      id:          g(iID)   || 'WF-???',
+      material:    g(iMat)  || 'Sin nombre',
+      area:        AREAS[area] ? area : 'compras',
+      param:       g(iParam) || '—',
+      days:        parseInt(g(iDays)) || 0,
+      status:      ['done','wip','pending','blocked'].includes(status) ? status : 'pending',
+      responsable: g(iResp),
+      fecha:       g(iFecha),
+      reason:      g(iReason),
     };
   }).filter(w => w.id && w.id !== 'WF-???');
 }

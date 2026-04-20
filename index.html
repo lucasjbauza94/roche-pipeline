@@ -873,7 +873,7 @@ function parseCSV(text){
   const idx=(ns)=>{for(const n of ns){const i=hdr.findIndex(h=>h.includes(n));if(i>=0)return i;}return -1;};
   const iID=idx(['id_workflow','id']),iMat=idx(['material']),iArea=idx(['area']),iParam=idx(['parametro_sap','parametro','param']);
   const iDays=idx(['dias_proceso','dias','days']),iSt=idx(['estado','status']),iResp=idx(['responsable']);
-  const iFecha=idx(['fecha_completado','fecha']),iReason=idx(['motivo_demora','motivo','reason']);
+  const iFecha=idx(['fecha_cierre','fecha_completado']),iReason=idx(['motivo_demora','motivo','reason']);
   return lines.slice(1).map(line=>{
     const cols=parseLine(line);const g=(i)=>i>=0?clean(cols[i]):'';
     const area=g(iArea).toLowerCase(),status=g(iSt).toLowerCase();
@@ -959,7 +959,7 @@ function openModal(id){
     <div class="mrow"><span>Estado</span><span style="color:${SC[w.status]};font-weight:700">${slabel(w.status)}</span></div>
     <div class="mrow"><span>Días en proceso</span><span style="color:${w.days>SLA?'var(--red)':w.days>60?'var(--amber)':'var(--green)'}">${w.days}d</span></div>
     ${w.responsable?`<div class="mrow"><span>Responsable</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px">${w.responsable}</span></div>`:''}
-    ${w.fecha?`<div class="mrow"><span>Completado</span><span style="color:var(--green)">${w.fecha}</span></div>`:''}
+    ${w.fecha?`<div class="mrow"><span>Fecha de cierre</span><span style="color:var(--green)">${w.fecha}</span></div>`:''}
     ${w.reason?`<div class="mrow"><span>Motivo demora</span><span style="color:var(--amber);font-size:11px">${w.reason}</span></div>`:''}
     <div style="margin-top:14px;padding:9px 12px;background:rgba(0,200,120,.06);border:1px solid rgba(0,200,120,.15);border-radius:8px;font-size:10px;color:var(--muted)">
       📊 Para actualizar este workflow, editá la fila <strong style="color:var(--ink-2);font-family:'JetBrains Mono',monospace">${id}</strong> en Google Sheets.

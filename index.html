@@ -704,20 +704,6 @@ body{
         <button class="tbtn" onclick="exportCSV()">↓ CSV</button>
         <button class="tbtn" onclick="addRow()" style="border-color:rgba(79,172,254,.25);color:var(--blue)">+ Fila</button>
       </div>
-      <div class="board" id="board"></div>
-      <div class="aiwrap">
-        <div class="aihd">
-          <div class="aiico">✦</div>
-          <div><div class="aittl">OPEX IA · Análisis en tiempo real</div><div class="aistl">Powered by Claude · <span id="ai-upd">actualizando...</span></div></div>
-        </div>
-        <div class="aibody" id="ai-body"><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
-        <div class="aichips">
-          <span class="achip" onclick="qAI('bottleneck')">Cuello de botella</span>
-          <span class="achip" onclick="qAI('priority')">Prioridades hoy</span>
-          <span class="achip" onclick="qAI('sla')">Proyección SLA</span>
-          <span class="achip" onclick="qAI('action')">Plan de acción</span>
-        </div>
-      </div>
       <div class="chrow">
         <!-- CUSTOM SVG BAR CHART -->
         <div class="cpanel">
@@ -738,6 +724,20 @@ body{
       <div class="botrow">
         <div class="panel"><div class="ptitle">Alertas SLA activas <span style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:400;color:var(--muted)" id="alct"></span></div><div id="alerts"></div></div>
         <div class="panel"><div class="ptitle">Completitud por área</div><div id="aprog"></div></div>
+      </div>
+      <div class="board" id="board"></div>
+      <div class="aiwrap">
+        <div class="aihd">
+          <div class="aiico">✦</div>
+          <div><div class="aittl">OPEX IA · Análisis en tiempo real</div><div class="aistl">Powered by Claude · <span id="ai-upd">actualizando...</span></div></div>
+        </div>
+        <div class="aibody" id="ai-body"><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+        <div class="aichips">
+          <span class="achip" onclick="qAI('bottleneck')">Cuello de botella</span>
+          <span class="achip" onclick="qAI('priority')">Prioridades hoy</span>
+          <span class="achip" onclick="qAI('sla')">Proyección SLA</span>
+          <span class="achip" onclick="qAI('action')">Plan de acción</span>
+        </div>
       </div>
     </div>
 

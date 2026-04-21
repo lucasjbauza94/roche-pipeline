@@ -1135,6 +1135,12 @@ function showToast(msg,type='success'){
 }
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('setup-url').addEventListener('keydown',e=>{if(e.key==='Enter')doConnect();});
+  // Auto-connect: si la URL del Sheets ya está pre-cargada, saltar el setup screen e ir directo al dashboard
+  const preloadedURL = document.getElementById('setup-url').value.trim();
+  if (preloadedURL && preloadedURL !== 'DEMO' && preloadedURL.startsWith('https://')) {
+    // Dar un pequeño delay para que el DOM termine de renderizar y se vea la transición
+    setTimeout(() => { doConnect(); }, 100);
+  }
 });
 </script>
 </body>
